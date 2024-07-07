@@ -1,1 +1,1 @@
-# Leny
+(Majorly working in Roblox Studio so not exploit compatible yet.)
