@@ -9,15 +9,8 @@ local updateFillAndCurrentValueLabel = function(options, percent, value)
 	options.value = value
 end
 
-local showDragAndCurrentValueLabel = function(options, backgroundTransparency)
-	local currentValueLabelTextBoundsX = math.clamp(options.currentValueLabel.TextBounds.X + 30, 10, 200)
-
-	Utility:tween(options.drag, {BackgroundTransparency = backgroundTransparency}):Play()
-	Utility:tween(options.currentValueLabel, {Size = UDim2.fromOffset(currentValueLabelTextBoundsX, 20), BackgroundTransparency = backgroundTransparency}):Play()
-end
-
 function SliderManager:handleSlider(dragBoolean, options)	
-	local updateSlider = function(options)	
+	local handler = function(options)	
 		local round = function(number)
 			if options.decimalPlaces == 0 then
 				return math.round(number)
@@ -35,18 +28,18 @@ function SliderManager:handleSlider(dragBoolean, options)
 		local percent = math.clamp((getMouseLocation.X - Line.AbsolutePosition.X) / Line.AbsoluteSize.X, 0, 1)
 		local value = round((percent * (max - min)) + min)
 
-		showDragAndCurrentValueLabel(options, 0)
+		self:showDragAndCurrentValueLabel(options, 0)()
 		updateFillAndCurrentValueLabel(options, percent, value)
 	end
 	
 	return function(input)
 		if dragBoolean:get() and input.UserInputType == Enum.UserInputType.MouseMovement then
-			updateSlider(options)
+			handler(options)
 		end
 	end
 end
 
-function SliderManager:setValue(newValue, options)
+function SliderManager:updateValue(newValue, options)
 	local min, max = options.min, options.max	
 	local percent = (math.clamp(newValue, min, max) - min) / (max - min)
 
@@ -55,7 +48,10 @@ end
 
 function SliderManager:showDragAndCurrentValueLabel(options, backgroundTransparency)
 	return function()
-		showDragAndCurrentValueLabel(options, backgroundTransparency)
+		local currentValueLabelTextBoundsX = math.clamp(options.currentValueLabel.TextBounds.X + 30, 10, 200)
+
+		Utility:tween(options.drag, {BackgroundTransparency = backgroundTransparency}):Play()
+		Utility:tween(options.currentValueLabel, {Size = UDim2.fromOffset(currentValueLabelTextBoundsX, 20), BackgroundTransparency = backgroundTransparency}):Play()
 	end
 end
 
@@ -69,7 +65,7 @@ function SliderManager:disableDrag(dragBoolean, options)
 	return function(input)
 		if dragBoolean:get() and input.UserInputType == Enum.UserInputType.MouseButton1 then
 			dragBoolean:set(false)
-			showDragAndCurrentValueLabel(options, 1)
+			self:showDragAndCurrentValueLabel(options, 1)()
 		end
 	end
 end

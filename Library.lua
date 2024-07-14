@@ -2,6 +2,7 @@ local Library = {
 	Flags = {
 		Toggles = {},
 		Sliders = {},
+		Dropdowns = {},
 	},
 	
 	Connections = {},
@@ -21,6 +22,7 @@ local ThemeManager = require(Modules.ThemeManager)
 local TabManager = require(Modules.TabManager)
 local ToggleManager = require(Modules.ToggleManager)
 local SliderManager = require(Modules.SliderManager)
+local DropdownManager = require(Modules.DropdownManager)
 
 local UserInputService = Utility:getUserInputService()
 local Theme = ThemeManager.Theme
@@ -32,8 +34,6 @@ local LeftFolder = Main.Left
 local RightFolder = Main.Right
 
 local firstTabIsVisible = Utility:createBoolean(false)
-local firstSubTabIsVisible = Utility:createBoolean(false)
-local leftAndRightAbsoluteContentSizeDebounce = Utility:createBoolean(false)
 
 --// Library Functions
 function Library:destroy()
@@ -52,6 +52,10 @@ function Library:createAddons(subElements, imageButton, additionalAddons)
 		
 		createSlider = function(options)
 			self:createSlider(options, subElements)
+		end,
+		
+		createDropdown = function(options)
+			self:createDropdown(options, subElements)
 		end,
 	}
 
@@ -85,11 +89,19 @@ end
 function Library:showSubElements(showBoolean, subElements, subElementsUIListLayout)
 	return function()
 		showBoolean:set(not showBoolean:get())
-
+				
 		if showBoolean:get() then
-			Utility:tween(subElements, {Size = UDim2.new(1, 0, 0, subElementsUIListLayout.AbsoluteContentSize.Y)}):Play()
+			Utility:tween(subElements, {Size = UDim2.new(1, 0, 0, subElementsUIListLayout.AbsoluteContentSize.Y + 8)}):Play()
 		else
 			Utility:tween(subElements, {Size = UDim2.new(1, 0, 0, 0)}):Play()
+		end
+	end
+end
+
+function Library:autoSizeSubElements(showBoolean, subElements, subElementsUIListLayout)
+	return function()
+		if showBoolean:get() then
+			Utility:tween(subElements, {Size = UDim2.new(1, 0, 0, subElementsUIListLayout.AbsoluteContentSize.Y + 8)}):Play()
 		end
 	end
 end
@@ -104,11 +116,13 @@ function Library:createLabel(options)
 end
 
 function Library:createTab(options)
+	--// Assign Defaults
 	options = {
 		text = options.text or "Tab",
 		icon = options.icon or "11673940370",
 		callback = options.callback or function() end,
 	}
+	--
 
 	local Tabs = LeftFolder.Frame.Frame.Tabs
 	local UIListLayout = Tabs.UIListLayout
@@ -221,14 +235,18 @@ function Library:createTab(options)
 	TabManager:showFirstTab(firstTabIsVisible, TabManagerOptions)
 	--
 
-	return setmetatable({Page = Page}, {__index = Library})
+	return setmetatable({Page = Page, firstSubTabIsVisible = Utility:createBoolean(false)}, {__index = Library})
 end
 
 function Library:createSubTab(options)
+	--// Assign Defaults
 	options = {
 		text = options.text or "Tab",
 		callback = options.callback or function() end,
 	}
+	--
+	
+	local firstSubTabIsVisible = self.firstSubTabIsVisible
 	
 	local Frame = self.Page.Frame
 	local SubTabs = Frame.ScrollingFrame
@@ -287,7 +305,7 @@ function Library:createSubTab(options)
 	end
 
 	local autoSizeSubTabsCanvasSizeAndFrameSize = function()
-		local scaleX, offsetX = Utility:calculateScaleAndOffset(SubUIListLayout.AbsoluteContentSize.X, Frame.AbsoluteSize.X)
+		local scaleX, offsetX = Utility:calculateScaleAndOffset(SubUIListLayout.AbsoluteContentSize.X, self.Page.AbsoluteSize.X - 14)
 		
 		Frame.Size = UDim2.new(scaleX, offsetX, 0, 30)
 		SubTabs.CanvasSize = UDim2.fromOffset(SubUIListLayout.AbsoluteContentSize.X, 0)
@@ -320,6 +338,7 @@ function Library:createSubTab(options)
 		{SubTabButton, "MouseButton1Down", TabManager:changeToTab(TabManagerOptions)},
 		{SubTabs, "GetPropertyChangedSignal", "CanvasPosition", makeMoveableCanvasPropertiesSameAsSubTabs},
 		{SubUIListLayout, "GetPropertyChangedSignal", "AbsoluteContentSize", autoSizeSubTabsCanvasSizeAndFrameSize},
+		{Glow, "GetPropertyChangedSignal", "AbsoluteSize", autoSizeSubTabsCanvasSizeAndFrameSize}
 	}
 	
 	autoSizeSubTabsCanvasSizeAndFrameSize()
@@ -327,14 +346,18 @@ function Library:createSubTab(options)
 	TabManager:showFirstTab(firstSubTabIsVisible, TabManagerOptions)	
 	--
 
-	return setmetatable({SubPages = SubPages, SubPage = SubPage}, {__index = Library})
+	return setmetatable({SubPages = SubPages, SubPage = SubPage, leftAndRightAbsoluteContentSizeDebounce = Utility:createBoolean(false)}, {__index = Library})
 end
 
 function Library:createSection(options)
+	--// Assign Defaults
 	options = {
 		position = options.position or "Left",
 		text = options.text or "Section",
 	}
+	--
+	
+	local leftAndRightAbsoluteContentSizeDebounce = self.leftAndRightAbsoluteContentSizeDebounce
 
 	local Section = UI.Section:Clone()
 	Section.Visible = true
@@ -364,7 +387,7 @@ function Library:createSection(options)
 	--// Function calls and Connections
 	autoSectionSize()
 	UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(autoSectionSize)
-
+	
 	if not leftAndRightAbsoluteContentSizeDebounce:get() then
 		leftAndRightAbsoluteContentSizeDebounce:set(true)
 		SubPageLeft.UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(autoSubPagesCanvasSize)
@@ -376,6 +399,7 @@ function Library:createSection(options)
 end
 
 function Library:createToggle(options, parent)
+	--// Assign Defaults
 	options = {
 		text = options.text or "Toggle",
 		callback = options.callback or function() end,
@@ -386,6 +410,7 @@ function Library:createToggle(options, parent)
 	
 	options.flagName = options.flagName or options.text
 	parent = parent or self.Section
+	--
 	
 	local Toggle = Objects.UI.Elements.Toggle:Clone()
 	Toggle.Visible = true
@@ -393,6 +418,7 @@ function Library:createToggle(options, parent)
 	
 	local ToggleUIListLayout = Toggle.UIListLayout
 	local TextButton = Toggle.TextButton
+	
 	local SubElements = Toggle.SubElements
 	local SubElementsUIListLayout = SubElements.UIListLayout
 	
@@ -433,7 +459,8 @@ function Library:createToggle(options, parent)
 		{TextButton, "MouseButton1Down", ToggleManager:handleToggle(ToggleOptions)},
 		{ToggleButton, "MouseButton1Down", ToggleManager:handleToggle(ToggleOptions)},
 		{ImageButton, "MouseButton1Down", self:showSubElements(showingUI, SubElements, SubElementsUIListLayout)},
-		{ToggleUIListLayout, "GetPropertyChangedSignal", "AbsoluteContentSize", autoToggleSize}
+		{ToggleUIListLayout, "GetPropertyChangedSignal", "AbsoluteContentSize", autoToggleSize},
+		{SubElementsUIListLayout, "GetPropertyChangedSignal", "AbsoluteContentSize", self:autoSizeSubElements(showingUI, SubElements, SubElementsUIListLayout)},
 	}
 	
 	Utility:connectEvents(Library.Connections, Events)
@@ -445,6 +472,7 @@ function Library:createToggle(options, parent)
 end
 
 function Library:createSlider(options, parent)
+	--// Assign Defaults
 	options = {
 		text = options.text or "Slider",
 		callback = options.callback or function() end,
@@ -458,14 +486,17 @@ function Library:createSlider(options, parent)
 	options.default = options.default or options.min
 	options.flagName = options.flagName or options.text 
 	parent = parent or self.Section
+	--
 	
 	local Slider = Objects.UI.Elements.Slider:Clone()
 	Slider.Visible = true
 	Slider.Parent = parent
 	
 	local SliderUIListLayout = Slider.UIListLayout
+	
 	local SubElements = Slider.SubElements
 	local SubElementsUIListLayout = SubElements.UIListLayout
+	
 	local TextButton = Slider.TextButton
 	
 	local TextLabel = TextButton.TextLabel
@@ -482,9 +513,11 @@ function Library:createSlider(options, parent)
 	CurrentValueLabel.Text = options.default
 	CurrentValueLabel.Size = UDim2.fromOffset(CurrentValueLabel.TextBounds.X + 30, 20)
 	
+	--// Functions
 	local autoSliderSize = function()
 		Utility:tween(Slider, {Size = UDim2.new(1, 0, 0, SliderUIListLayout.AbsoluteContentSize.Y - 8)}):Play()
 	end
+	--
 			
 	--// Function calls and Connections
 	local SliderOptions = {
@@ -503,8 +536,8 @@ function Library:createSlider(options, parent)
 	}
 		
 	local Addons = self:createAddons(SubElements, ImageButton, {
-		setValue = function(self, newValue)
-			SliderManager:setValue(newValue, SliderOptions)
+		updateValue = function(self, newValue)
+			SliderManager:updateValue(newValue, SliderOptions)
 		end,
 		
 		getValue = SliderManager:getValue(SliderOptions),
@@ -521,12 +554,147 @@ function Library:createSlider(options, parent)
 		{LineButton, "MouseButton1Down", SliderManager:enableDrag(dragging)},
 		{DragButton, "MouseButton1Down", SliderManager:enableDrag(dragging)},
 		{SliderUIListLayout, "GetPropertyChangedSignal", "AbsoluteContentSize", autoSliderSize},
-		{ImageButton, "MouseButton1Down", self:showSubElements(showingUI, SubElements, SubElementsUIListLayout)}
+		{ImageButton, "MouseButton1Down", self:showSubElements(showingUI, SubElements, SubElementsUIListLayout)},
+		{SubElementsUIListLayout, "GetPropertyChangedSignal", "AbsoluteContentSize", self:autoSizeSubElements(showingUI, SubElements, SubElementsUIListLayout)},
 	}
 	
 	Utility:connectEvents(Library.Connections, Events)
 	Flags.Sliders[options.flagName] = Addons
-	SliderManager:setValue(options.default, SliderOptions)
+	SliderManager:updateValue(options.default, SliderOptions)
+	--
+	
+	return Addons
+end
+
+function Library:createDropdown(options, parent)
+	--// Assign Defaults
+	options = {
+		text = options.text or "Dropdown",
+		callback = options.callback or function() end,
+		list = options.list or {1, 2, 3},
+		default = options.default or {},
+		multiple = options.multiple or false,
+	}
+	
+	local MultipleTable = {}
+	options.flagName = options.flagName or options.text 
+	parent = parent or self.Section
+	--
+	
+	local Dropdown = Objects.UI.Elements.Dropdown:Clone()
+	Dropdown.Visible = true
+	Dropdown.Parent = parent
+	
+	local DropdownUIListLayout = Dropdown.UIListLayout
+	
+	local List = Dropdown.List
+	local ListUIListLayout = List.UIListLayout
+	
+	local ScrollingFrame = List.ScrollingFrame
+	local ScrollingFrameUIListLayout = ScrollingFrame.UIListLayout
+	
+	local SubElements = Dropdown.SubElements
+	local SubElementsUIListLayout = SubElements.UIListLayout
+	
+	local DropdownTextButton = Dropdown.TextButton
+	
+	local TextLabel = DropdownTextButton.TextLabel
+	TextLabel.Text = options.text
+	
+	local ImageButton = TextLabel.ImageButton
+	local Frame = TextLabel.Frame
+	local ShowListButton = Frame.TextButton
+	
+	--// Functions
+	local createDropButton = function(value)
+		local DropButton = Objects.UI.Elements.DropButton:Clone()
+		DropButton.Visible = true
+		DropButton.Parent = ScrollingFrame
+		
+		local TextButton = DropButton.TextButton
+		
+		local TextLabel = TextButton.TextLabel
+		TextLabel.Text = tostring(value)
+		
+		return TextButton
+	end
+	
+	local autoDropdownSize = function()
+		local paddingY = 8
+		
+		if List.Size.Y.Offset <= 0 or SubElements.Size.Y.Offset <= 0 then
+			paddingY = 16
+		end
+		
+		Utility:tween(Dropdown, {Size = UDim2.new(1, 0, 0, DropdownUIListLayout.AbsoluteContentSize.Y - paddingY)}):Play()
+	end
+	
+	local autoScrollingFrameSize = function()
+		local sizeY = math.clamp(ScrollingFrameUIListLayout.AbsoluteContentSize.Y, 0, 128)
+		Utility:tween(ScrollingFrame, {Size = UDim2.new(1, 0, 0, sizeY + 8), CanvasSize = UDim2.fromOffset(0, ScrollingFrameUIListLayout.AbsoluteContentSize.Y)}):Play()
+	end
+	
+	local autoListSize = function(showBoolean)
+		return function()
+			if showBoolean:get() then
+				Utility:tween(List, {Size = UDim2.new(1, 0, 0, ListUIListLayout.AbsoluteContentSize.Y + 8)}):Play()
+			end
+		end
+	end
+	
+	local showList = function(showBoolean)	
+		return function()			
+			showBoolean:set(not showBoolean:get())
+			
+			if showBoolean:get() then
+				SubElements.LayoutOrder = List.LayoutOrder + 1
+				Utility:tween(List, {Size = UDim2.new(1, 0, 0, ListUIListLayout.AbsoluteContentSize.Y + 8)}):Play()
+			else
+				Utility:tween(List, {Size = UDim2.new(1, 0, 0, 0)}):Play()
+				task.delay(0.3, function()
+					SubElements.LayoutOrder = List.LayoutOrder - 1
+				end)
+			end
+		end
+	end
+	--
+	
+	--// Functions calls and Connections
+	local DropdownOptions = {
+		list = options.list,
+		multipleTable = MultipleTable,
+		default = options.default,
+		createDropButton = createDropButton,
+		multiple = options.multiple,
+		theme = Theme,
+		callback = options.callback,
+		value = options.default,
+		objectWithDropButtons = ScrollingFrame,
+		showListButton = ShowListButton,
+	}
+	
+	local Addons = self:createAddons(SubElements, ImageButton, {
+		updateList = function(self, newList, newDefault)
+			DropdownManager:updateList(newList, newDefault, DropdownOptions)
+		end,
+
+		getValue = DropdownManager:getValue(DropdownOptions),
+	})
+	
+	local showingUI, showingListUI = Utility:createBoolean(false), Utility:createBoolean(false)
+	
+	local Events = {
+		{ImageButton, "MouseButton1Down", self:showSubElements(showingUI, SubElements, SubElementsUIListLayout)},
+		{DropdownUIListLayout, "GetPropertyChangedSignal", "AbsoluteContentSize", autoDropdownSize},
+		{ScrollingFrameUIListLayout, "GetPropertyChangedSignal", "AbsoluteContentSize", autoScrollingFrameSize},
+		{ShowListButton, "MouseButton1Down", showList(showingListUI)},
+		{ListUIListLayout, "GetPropertyChangedSignal", "AbsoluteContentSize", autoListSize(showingListUI)},
+		{SubElementsUIListLayout, "GetPropertyChangedSignal", "AbsoluteContentSize", self:autoSizeSubElements(showingUI, SubElements, SubElementsUIListLayout)},
+	}
+	
+	Utility:connectEvents(Library.Connections, Events)
+	Flags.Dropdowns[options.flagName] = Addons
+	DropdownManager:handleDropdown(DropdownOptions)
 	--
 	
 	return Addons
